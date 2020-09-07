@@ -8,10 +8,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Types
-
-let template_DOTgithub_workflows_ci_ml _p =
-  {|
+let template_DOTgithub_workflows_ci_ml =
+  {|!{github:skip}!{workflows:skip}
 (* Credits: https://github.com/ocaml/dune *)
 open StdLabels
 
@@ -63,14 +61,17 @@ let () =
     exit 1
 |}
 
-let template_DOTgithub_workflows_workflow_yml p =
-  Printf.sprintf
-    {|
+let template_DOTgithub_workflows_workflow_yml =
+  {|!{github:skip}!{workflows:skip}
 name: Main Workflow
 
 on:
-  - push
-  - pull_request
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 jobs:
   build:
@@ -80,12 +81,13 @@ jobs:
         os:
           - macos-latest
           - ubuntu-latest
-%s          - windows-latest
+!{comment-if-not-windows-ci}          - windows-latest
         ocaml-version:
-          - %s
+          - !{edition}
         skip_test:
           - false
-%s
+!{include-for-min-edition}
+
     env:
       SKIP_TEST: ${{ matrix.skip_test }}
       OCAML_VERSION: ${{ matrix.ocaml-version }}
@@ -97,6 +99,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: /home/runner/.opam
+          key: ${{ runner.os }}-!{name}-opam-cache-${{ hashFiles('*.opam') }}
       - name: Use OCaml ${{ matrix.ocaml-version }}
         uses: avsm/setup-ocaml@v1
         with:
@@ -120,16 +127,11 @@ jobs:
       - name: test source is well formatted
         run: opam exec -- make fmt-check
         continue-on-error: true
-        if: env.OCAML_VERSION == '%s' && env.OS == 'ubuntu-latest'
+        if: env.OCAML_VERSION == '!{edition}' && env.OS == 'ubuntu-latest'
 |}
-    ( if p.windows_ci then "" else "#" )
-    p.edition
-    (if p.edition = p.min_edition then "" else
-       Printf.sprintf
-         {|
-        include:
-          - ocaml-version: %s
-            os: ubuntu-latest
-            skip_test: true
-|} p.min_edition)
-    p.edition
+
+let project_files =
+  [
+    (".github/workflows/workflow.yml", template_DOTgithub_workflows_workflow_yml);
+    (".github/workflows/ci.ml", template_DOTgithub_workflows_ci_ml);
+  ]

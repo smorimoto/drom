@@ -2,8 +2,12 @@
 name: Main Workflow
 
 on:
-  - push
-  - pull_request
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 jobs:
   build:
@@ -20,9 +24,10 @@ jobs:
           - false
 
         include:
-          - ocaml-version: 4.03.0
+          - ocaml-version: 4.05.0
             os: ubuntu-latest
             skip_test: true
+
 
     env:
       SKIP_TEST: ${{ matrix.skip_test }}
@@ -35,6 +40,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: /home/runner/.opam
+          key: ${{ runner.os }}-drom-opam-cache-${{ hashFiles('*.opam') }}
       - name: Use OCaml ${{ matrix.ocaml-version }}
         uses: avsm/setup-ocaml@v1
         with:
