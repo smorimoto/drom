@@ -8,59 +8,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let template_DOTgithub_workflows_ci_ml =
-  {|!{github:skip}!{workflows:skip}
-(* Credits: https://github.com/ocaml/dune *)
-open StdLabels
-
-let skip_test =
-  match Sys.getenv "SKIP_TEST" with
-  | exception Not_found -> false
-  | s -> bool_of_string s
-
-let run cmd args =
-  (* broken when arguments contain spaces but it's good enough for now. *)
-  let cmd = String.concat " " (cmd :: args) in
-  match Sys.command cmd with
-  | 0 -> ()
-  | n ->
-    Printf.eprintf "'%s' failed with code %d" cmd n;
-    exit n
-
-let opam args = run "opam" args
-
-let pin () =
-  let packages =
-    let packages = Sys.readdir "." |> Array.to_list in
-    let packages =
-      List.fold_left packages ~init:[] ~f:(fun acc fname ->
-          if Filename.check_suffix fname ".opam" then
-            Filename.chop_suffix fname ".opam" :: acc
-          else
-            acc)
-    in
-    if skip_test then
-      List.filter packages ~f:(fun pkg -> pkg = "dune")
-    else
-      packages
-  in
-  List.iter packages ~f:(fun package ->
-      opam [ "pin"; "add"; package ^ ".next"; "."; "--no-action" ])
-
-let test () =
-    opam [ "install"; "."; "--deps-only"; "--with-test" ];
-    run "make" [ "dev-deps" ];
-    run "make" [ "test" ]
-
-let () =
-  match Sys.argv with
-  | [| _; "pin" |] -> pin ()
-  | [| _; "test" |] -> test ()
-  | _ ->
-    prerr_endline "Usage: ci.ml [pin | test]";
-    exit 1
-|}
-
 let template_DOTgithub_workflows_workflow_yml =
   {|!{github:skip}!{workflows:skip}
 name: Main Workflow
@@ -114,18 +61,18 @@ jobs:
           git config --global user.name github-actions
           git config --global user.email github-actions-bot@users.noreply.github.com
 
-      - run: opam exec -- ocaml .github/workflows/ci.ml pin
+      - run: opam depext -y ./*.opam
 
-      - run: opam install ./*.opam --deps-only --with-test
+      - run: opam install -y ./*.opam --deps-only --with-test
 
-      - run: opam exec -- make all
+      - run: opam exec -- dune build @install
 
       - name: run test suite
-        run: opam exec -- ocaml .github/workflows/ci.ml test
+        run: opam exec -- dune build @runtest
         if: env.SKIP_TEST != 'true'
 
       - name: test source is well formatted
-        run: opam exec -- make fmt-check
+        run: opam exec -- dune build @fmt
         continue-on-error: true
         if: env.OCAML_VERSION == '!{edition}' && env.OS == 'ubuntu-latest'
 |}
@@ -133,5 +80,4 @@ jobs:
 let project_files =
   [
     (".github/workflows/workflow.yml", template_DOTgithub_workflows_workflow_yml);
-    (".github/workflows/ci.ml", template_DOTgithub_workflows_ci_ml);
   ]
